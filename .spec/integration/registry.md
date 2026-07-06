@@ -2,4 +2,4 @@
 
 | ID | Tính năng (slug) | Loại | frd | tech | security | test | plan | code | report | review | Ngày |
 |-------|------------------|------|-----|------|----------|------|------|------|--------|--------|------|
-| i-20260706231719-ban-tin-hang-ngay | ban-tin-hang-ngay | tính năng mới | approved | approved | approved | approved (phân tầng xong) | approved | done | 22P/0F/15B | — | 2026-07-07 |
+| i-20260706231719-ban-tin-hang-ngay | ban-tin-hang-ngay | tính năng mới | approved | approved | approved | approved (phân tầng xong) | approved | done | 25P/0F/12B | done (4 bug đã sửa) | 2026-07-07 |

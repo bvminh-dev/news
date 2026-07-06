@@ -131,7 +131,10 @@ export async function ensureIndexes(db?: Db): Promise<void> {
   await c.subscribers.createIndex({ categoryId: 1, email: 1 }, { unique: true });
   await c.subscribers.createIndex({ unsubscribeToken: 1 }, { unique: true });
 
-  await c.news.createIndex({ categoryId: 1, normalizedUrl: 1 }, { unique: true });
+  // BUG-2: khóa duy nhất gồm date → giữ lịch sử theo ngày, cho phép tái xuất sau dedup-window
+  // mà không đè bản ghi cũ; vẫn idempotent khi rerun cùng ngày.
+  await c.news.createIndex({ categoryId: 1, date: 1, normalizedUrl: 1 }, { unique: true });
+  await c.news.createIndex({ categoryId: 1, normalizedUrl: 1, date: 1 });
   await c.news.createIndex({ categoryId: 1, fingerprint: 1, date: 1 });
   await c.news.createIndex({ categoryId: 1, date: 1 });
   await c.news.createIndex({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds });

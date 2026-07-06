@@ -117,7 +117,9 @@ export async function collectCategory(
   // upsert news_items (idempotent theo (categoryId, normalizedUrl))
   const now = new Date();
   for (const item of ranked) {
-    const doc: NewsItemDoc = {
+    // BUG-1: KHÔNG đặt createdAt trong $set (tránh xung đột với $setOnInsert).
+    // BUG-2: khóa upsert gồm date → không đè bản ghi ngày khác (giữ lịch sử), vẫn idempotent trong-ngày.
+    const setFields: Omit<NewsItemDoc, 'createdAt' | '_id'> = {
       categoryId: category._id!,
       date,
       title: item.title,
@@ -134,11 +136,10 @@ export async function collectCategory(
       rank: item.rank,
       fingerprint: item.fingerprint,
       algoVersion: ALGO_VERSION,
-      createdAt: now,
     };
     await c.news.updateOne(
-      { categoryId: category._id, normalizedUrl: item.normalizedUrl },
-      { $set: { ...doc, date, rank: item.rank }, $setOnInsert: { createdAt: now } },
+      { categoryId: category._id, date, normalizedUrl: item.normalizedUrl },
+      { $set: setFields, $setOnInsert: { createdAt: now } },
       { upsert: true },
     );
   }

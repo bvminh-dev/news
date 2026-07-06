@@ -25,3 +25,7 @@
 
 ## [2026-07-07] /tn-bao-cao (i-20260706231719-ban-tin-hang-ngay)
 - Report: 22 PASS / 0 FAIL / 15 BLOCKED (Functional DB-backed + E2E thiếu MongoDB/SMTP/browser). 0 defect. Conditional GO (dev); cần chạy Functional DB + E2E trước production. report = draft.
+
+## [2026-07-07] /tn-review (i-20260706231719-ban-tin-hang-ngay)
+- review-code phát hiện 4 bug: BUG-1 [CRITICAL] upsert conflict createdAt (collect không ghi được tin), BUG-2 [HIGH] index thiếu date đè lịch sử, BUG-3 [HIGH] login thiếu rate-limit, BUG-4 [MEDIUM] fanout maxDuration.
+- Đã ghi bugfix.md + 5 rule vào CLAUDE.md, sửa code + thêm DB-backed test (mongodb-memory-server). vitest 46/46 PASS, tsc sạch. review = done.

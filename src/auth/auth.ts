@@ -9,6 +9,7 @@ import { getConfig } from '@/lib/config';
 import { collections, ensureIndexes } from '@/models';
 import { emailSchema } from '@/domain/schemas';
 import { log } from '@/lib/logger';
+import { rateLimit } from '@/lib/rateLimit';
 
 async function ensureAdminSeeded(): Promise<void> {
   const cfg = getConfig();
@@ -35,7 +36,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
-      async authorize(raw) {
+      async authorize(raw, request) {
+        // BUG-3: rate-limit/lockout login theo IP (chống brute-force/credential-stuffing).
+        const fwd = request?.headers?.get?.('x-forwarded-for') ?? '';
+        const ip = fwd.split(',')[0].trim() || 'unknown';
+        if (!rateLimit(`login:${ip}`, 5, 5 * 60_000)) {
+          log.warn('auth.login_rate_limited', { });
+          return null;
+        }
         const emailParsed = emailSchema.safeParse(raw?.email);
         const password = typeof raw?.password === 'string' ? raw.password : '';
         if (!emailParsed.success || !password) return null;

@@ -9,7 +9,7 @@ import { isQueueEnabled } from '@/adapters/queue';
 import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Cron 06:30 ICT (23:30 UTC). Chỉ gửi danh mục đã collected.
 export async function GET(req: NextRequest): Promise<NextResponse> {

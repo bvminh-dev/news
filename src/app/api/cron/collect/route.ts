@@ -9,7 +9,8 @@ import { isQueueEnabled } from '@/adapters/queue';
 import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// BUG-4: nâng lên 300 cho fanout tuần tự (fallback không QStash). Nhiều danh mục nên bật QStash (ADR-02).
+export const maxDuration = 300;
 
 // Cron 06:00 ICT (23:00 UTC). Trả 202 NGAY, fan-out chạy nội bộ.
 export async function GET(req: NextRequest): Promise<NextResponse> {

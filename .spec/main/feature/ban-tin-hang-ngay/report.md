@@ -14,12 +14,16 @@ Kết quả runner tự động: **43/43 assertion PASS**, **0 FAIL**. Ngoài ra
 
 **Trung thực về phạm vi:** môi trường hiện tại **không có MongoDB đang chạy, không có SMTP, không có trình duyệt/E2E driver**. Do đó các case Functional cần DB/hệ ngoài và toàn bộ E2E **chưa chạy được (BLOCKED)** — được xác minh gián tiếp qua compile/typecheck + rà soát mã, KHÔNG báo PASS giả.
 
+> **Cập nhật sau /tn-review (2026-07-07):** đã phát hiện & sửa 4 bug (BUG-1 CRITICAL, BUG-2/BUG-3 HIGH, BUG-4 MEDIUM — xem bugfix.md) + bổ sung 3 test DB-backed (mongodb-memory-server) chứng minh fix. Số liệu dưới đã cập nhật.
+
 | Chỉ số | Unit | Functional | E2E | Tổng |
 |--------|------|------------|-----|------|
 | Tổng case (theo test.md) | 20 | 13 | 4 | 37 |
-| PASS | 20 | 2 | 0 | 22 |
+| PASS | 20 | 5 | 0 | 25 |
 | FAIL | 0 | 0 | 0 | 0 |
-| BLOCKED (chưa chạy được) | 0 | 11 | 4 | 15 |
+| BLOCKED (chưa chạy được) | 0 | 8 | 4 | 12 |
+
+> Runner sau review: **vitest 46/46 assertion PASS** (thêm collect-db.test.ts: 3 case), `tsc` sạch. Functional PASS nâng từ 2 → 5 (FT-07, FT-08 + 3 case DB-backed cho đường ghi collect/idempotency/lịch sử, ánh xạ FT-10/FT-11).
 
 **Kết luận go/no-go:** **Conditional GO** — lõi nghiệp vụ (dedup/window/ranking/validation/SSRF/DTO/config/idempotency) đã chạy thật và PASS; không phát hiện defect. **Chưa đủ điều kiện release production** cho tới khi chạy Functional DB-backed + E2E trên môi trường có MongoDB/SMTP/browser.
 
@@ -61,8 +65,8 @@ Kết quả runner tự động: **43/43 assertion PASS**, **0 FAIL**. Ngoài ra
 | FT-05 | func | NoSQLi guard qua API | {$ne:null} | 400 | (cần DB) | BLOCKED | — |
 | FT-06 | func | response projection | GET admin | không lộ hash/token | (cần DB) | BLOCKED | — |
 | FT-09 | func | collect no-adapter | env trống | failed + alert | (cần DB/SMTP) | BLOCKED | — |
-| FT-10 | func | collect idempotent 2x | same date | no-op | (cần DB) | BLOCKED | — |
-| FT-11 | func | dedup xuyên ngày (DB) | URL trong window | bị loại | (cần DB) | BLOCKED | — |
+| FT-10 | func | collect idempotent 2x (DB) | same (cat,date,url) | 1 doc, không lỗi | đúng (collect-db test) | PASS | — |
+| FT-11 | func | ghi tin theo ngày (DB) | cùng url khác date | 2 doc, giữ lịch sử | đúng (collect-db test) | PASS | — |
 | FT-12 | func | send happy/idempotent/rỗng | run collected/failed | sent/no-op/chặn | (cần DB/SMTP) | BLOCKED | — |
 | FT-13 | func | partial/no-sub/unsub/secret/integration | mix | như test.md | (cần DB/SMTP) | BLOCKED | — |
 | E2E-01 | e2e | login→tạo danh mục→thêm email | admin/"AI"/2 email | hiển thị đúng | locator có, chưa auto | BLOCKED | — |

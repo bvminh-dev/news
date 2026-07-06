@@ -77,3 +77,18 @@
 - Việc đã làm: chạy vitest (43/43 PASS), tsc sạch, next build 15 route OK. Ghi report.md.
 - Kết quả: Unit 20/20 PASS · Functional 2 PASS (FT-07,08) + 11 BLOCKED (thiếu MongoDB/SMTP) · E2E 4 BLOCKED (thiếu app+DB+browser; locator đã xác minh có). Tổng 22 PASS / 0 FAIL / 15 BLOCKED. 0 defect.
 - Locator: không lệch → không back-prop. Conditional GO (dev); cần chạy Functional DB-backed + E2E trước production.
+
+## [2026-07-07] /tn-review (i-20260706231719-ban-tin-hang-ngay)
+- Skill dùng: review-code (Principal Engineer, 7 mục bắt buộc).
+- Bug tìm thấy (ghi bugfix.md):
+  - BUG-1 [CRITICAL]: upsert news_items đặt createdAt ở cả $set (spread ...doc) lẫn $setOnInsert → MongoDB conflict → collect không ghi được tin.
+  - BUG-2 [HIGH]: unique index (categoryId, normalizedUrl) thiếu date → tin tái xuất sau dedup-window (còn trong retention) ghi đè bản ghi lịch sử.
+  - BUG-3 [HIGH]: login thiếu rate-limit/lockout.
+  - BUG-4 [MEDIUM]: fanout after() bị maxDuration=60 chặn khi không dùng QStash.
+- Quyết định sửa (tài liệu trước → sửa sau): đã append 5 rule vào CLAUDE.md; sửa code:
+  - collect.ts: khóa upsert gồm date, tách createdAt chỉ ở $setOnInsert.
+  - models: unique index (categoryId, date, normalizedUrl) + index phụ (categoryId, normalizedUrl, date).
+  - auth.ts: rate-limit login 5 lần/5 phút theo IP.
+  - cron/collect + cron/send: maxDuration 300.
+- Kết quả sau sửa: thêm tests/functional/collect-db.test.ts (mongodb-memory-server) chứng minh fix → vitest 46/46 PASS, tsc sạch.
+- Trạng thái: bug CRITICAL/HIGH đã sửa & có test → review = done.
