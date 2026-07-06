@@ -53,7 +53,7 @@ describe('UT-19 DTO loại field nhạy cảm', () => {
       unsubscribeToken: 'secret-token',
       createdAt: new Date(),
     };
-    const dto = toSubscriberDTO(s) as Record<string, unknown>;
+    const dto = toSubscriberDTO(s) as unknown as Record<string, unknown>;
     expect(dto.unsubscribeToken).toBeUndefined();
     expect(dto.email).toBe('a@b.com');
   });

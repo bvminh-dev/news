@@ -54,3 +54,26 @@
 - Quyết định/giả định: đường găng T1→T2→T3→T4→T8→T11→T12→T17→T18→T21; hoàn thành T13/T18 (bảo mật) trước khi expose UI; giữ giả định min-max engagement, QStash-fallback-waitUntil, 1 email/danh mục.
 - Lệch so với plan/spec: Không. plan.md không cascade.
 - Kết quả test/locator/bug: plan.md approved, open_questions = 0 → đủ điều kiện vào /tn-code (gate cứng).
+
+## [2026-07-07] /tn-code (i-20260706231719-ban-tin-hang-ngay)
+- GATE CỨNG: 5 doc {frd,tech,security,test,plan} đều approved, open_questions=0 → PASS.
+- Việc đã làm: hiện thực toàn bộ T1..T21 theo đường găng.
+  - T1 scaffold Next.js 15 (App Router, TS) + next.config (CSP/headers) + vercel.json (cron 23:00/23:30 UTC=06:00/06:30 ICT) + .gitignore (chặn .env*) + .env.example.
+  - T2 src/lib/config.ts (env loader, validateConfig fail-fast, retention≥dedup, không lộ secret). T3 src/lib/db.ts + src/models/index.ts (collections + indexes dedup/idempotency/TTL).
+  - T4 src/domain/schemas.ts (zod chống NoSQLi). T5 dedup.ts. T6 window.ts. T7 ranking.ts. + sanitize.ts, ssrf.ts, dto.ts, idempotency.ts, slug.ts, types.ts.
+  - T8 adapters/news/{types,perplexity,firecrawl,apify,registry}.ts (Registry theo env, SSRF guard, ACL). T9 adapters/mail.ts (Gmail SMTP + sendAlert). T10 adapters/queue.ts (QStash/fallback).
+  - T11 services/collect.ts + fanout.ts + app/api/cron/collect + app/api/worker/collect (idempotent, run-state, alert). T12 services/send.ts + digest.ts + app/api/cron/send + app/api/worker/send (không gửi email rỗng, idempotent (date,cat,email)).
+  - T13 auth/auth.ts (NextAuth Credentials, seed env, bcrypt) + lib/guard.ts (requireAdmin/requireCronSecret/verifyWorker/checkOrigin) + middleware.ts.
+  - T14 api/admin/categories[/id] (CRUD + DTO + audit). T15 api/admin/categories/[id]/subscribers[/sid]. T16 api/public/unsubscribe/[token] (token, chỉ set active=false, phản hồi generic).
+  - T17 app/login + app/dashboard + CategoryManager.tsx (đủ ~30 data-testid, confirm modal). + api/admin/runs + api/admin/categories/[id]/preview.
+  - T18 CSP/headers (next.config), rate-limit (lib/rateLimit) cho run-now/unsubscribe, checkOrigin CSRF, error generic. T19 lib/logger.ts structured + maskEmail + alert. T20 vercel.json + scripts/seed-admin.ts.
+  - T21 tests: 6 unit file (UT-01..20) + 1 functional (collect-pipeline) = 43 case.
+- Kết quả chạy: `vitest run` → 43/43 PASS; `tsc --noEmit` → sạch; `next build` → 15 route compiled OK.
+- Locator: hiện thực đúng 100% data-testid trong bảng E2E Locators (kể cả confirm-delete-btn dùng modal) → KHÔNG cần back-prop.
+- Lệch so với plan: không. Giả định giữ nguyên (min-max engagement, QStash-fallback-waitUntil, 1 email/danh mục, relevance dùng Perplexity).
+
+## [2026-07-07] /tn-bao-cao (i-20260706231719-ban-tin-hang-ngay)
+- Skill dùng: chay-kiem-thu (thực thi + báo cáo trung thực).
+- Việc đã làm: chạy vitest (43/43 PASS), tsc sạch, next build 15 route OK. Ghi report.md.
+- Kết quả: Unit 20/20 PASS · Functional 2 PASS (FT-07,08) + 11 BLOCKED (thiếu MongoDB/SMTP) · E2E 4 BLOCKED (thiếu app+DB+browser; locator đã xác minh có). Tổng 22 PASS / 0 FAIL / 15 BLOCKED. 0 defect.
+- Locator: không lệch → không back-prop. Conditional GO (dev); cần chạy Functional DB-backed + E2E trước production.

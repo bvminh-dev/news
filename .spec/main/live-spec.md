@@ -18,3 +18,10 @@
 
 ## [2026-07-06] /tn-ke-hoach (i-20260706231719-ban-tin-hang-ngay)
 - Plan: 21 task (T1..T21) + đồ thị phụ thuộc + đường găng + tiêu chí Done tổng. plan.md approved, open_questions = 0. Sẵn sàng /tn-code.
+
+## [2026-07-07] /tn-code (i-20260706231719-ban-tin-hang-ngay)
+- Hiện thực toàn bộ T1..T21 (Next.js 15 + MongoDB + NextAuth + adapters Perplexity/Firecrawl/Apify + Gmail SMTP + cron 06:00/06:30 ICT). Admin UI CRUD danh mục/email đủ data-testid.
+- Kết quả: vitest 43/43 PASS · tsc sạch · next build 15 route OK. Không back-prop locator. code = done.
+
+## [2026-07-07] /tn-bao-cao (i-20260706231719-ban-tin-hang-ngay)
+- Report: 22 PASS / 0 FAIL / 15 BLOCKED (Functional DB-backed + E2E thiếu MongoDB/SMTP/browser). 0 defect. Conditional GO (dev); cần chạy Functional DB + E2E trước production. report = draft.
