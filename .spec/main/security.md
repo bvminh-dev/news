@@ -4,7 +4,7 @@
 
 ## 1. Nguyên tắc xuyên suốt
 - Zero Trust · Least Privilege · Defense in Depth · Secure by Design.
-- **Secrets chỉ ở ENV** (Vercel), không hardcode/commit/log/trả API. `.gitignore` chặn `.env*`.
+- **Secrets chỉ ở ENV** (Vercel), không hardcode/commit/log/trả API. `.gitignore` chặn `.env*`. Claude nhận `ANTHROPIC_API_KEY` **hoặc** `ANTHROPIC_AUTH_TOKEN` (OAuth `sk-ant-oat`, ngắn hạn — xoay/cập nhật thủ công; có cả hai ⇒ ưu tiên token); bơm vào tiến trình `claude` CLI con qua ENV (không qua arg). CLI chạy `--permission-mode plan` (chỉ-đọc) chống prompt-injection; config dir cô lập. (i-20260707223448)
 - Guard server-side mọi route nhạy cảm (không tin client).
 
 ## 2. Trust boundaries & guard
@@ -13,7 +13,7 @@
 | Admin UI + `/api/admin/*` | Session NextAuth (vai trò `admin`), CSRF (SameSite + Origin/token) | i-20260706231719 |
 | `/api/cron/*`, `/api/worker/*` | `CRON_SECRET` (constant-time) + chữ ký QStash | i-20260706231719 |
 | `/api/public/unsubscribe/:token` | Capability-token ngẫu nhiên ≥128-bit, chỉ set active=false | i-20260706231719 |
-| Outbound (Perplexity/Firecrawl/Apify/Gmail) | Retry/timeout/circuit-breaker; Firecrawl chống SSRF | i-20260706231719 |
+| Outbound (Claude/Firecrawl/Apify/Gmail) | Retry/timeout/circuit-breaker; Firecrawl chống SSRF | i-20260706231719; i-20260707223448 (Claude thay Perplexity) |
 
 ## 3. Rủi ro CRITICAL/HIGH nổi bật
 - `[CRITICAL]` Hở auth admin/worker → EoP + spam email + đốt quota trả phí.

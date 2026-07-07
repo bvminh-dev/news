@@ -35,7 +35,10 @@ export async function sendCategory(categoryId: string, date: string): Promise<Se
     return { status: 'skipped', total: 0, sent: 0, failed: 0, reason: 'collect-not-ready' };
   }
 
-  const items = await c.news.find({ categoryId: catObjId, date }).sort({ rank: 1 }).toArray();
+  // Chỉ gửi top-N hiện hành (rank 1..N). Với "chạy ngay" giữ cả tin cũ (rank > N),
+  // giới hạn này đảm bảo email = bộ tin MỚI trên đầu, không phình theo số lần chạy lại.
+  const topN = category.topN ?? cfg.defaultTopN;
+  const items = await c.news.find({ categoryId: catObjId, date }).sort({ rank: 1 }).limit(topN).toArray();
   if (items.length === 0) {
     return { status: 'skipped', total: 0, sent: 0, failed: 0, reason: 'no-items' };
   }
@@ -55,8 +58,8 @@ export async function sendCategory(categoryId: string, date: string): Promise<Se
     { upsert: true },
   );
 
-  const note = collectRun.counts.selected < (category.topN ?? cfg.defaultTopN)
-    ? `Chỉ tìm được ${collectRun.counts.selected}/${category.topN ?? cfg.defaultTopN} tin.`
+  const note = collectRun.counts.selected < topN
+    ? `Chỉ tìm được ${collectRun.counts.selected}/${topN} tin.`
     : undefined;
 
   let sent = 0;
@@ -103,6 +106,13 @@ export async function sendCategory(categoryId: string, date: string): Promise<Se
   log.info('send.done', { categoryId, date, status, sent, failed });
 
   return { status, total: subscribers.length, sent, failed };
+}
+
+/** Xoá delivery_logs của (danh mục, ngày) để GỬI LẠI toàn bộ subscriber (dùng cho "chạy ngay"). */
+export async function resetDeliveries(categoryId: string, date: string): Promise<void> {
+  await ensureIndexes();
+  const c = await collections();
+  await c.deliveries.deleteMany({ date, categoryId: new ObjectId(categoryId) });
 }
 
 /** Danh mục đã collected|partial cho ngày → để fan-out gửi. */

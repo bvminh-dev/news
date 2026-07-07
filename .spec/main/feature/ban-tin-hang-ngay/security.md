@@ -11,7 +11,7 @@ updated: 2026-07-06
 
 | Tài sản | Loại | Độ nhạy cảm | Nơi lưu | Ai truy cập |
 |---------|------|-------------|---------|-------------|
-| API keys (Perplexity/Firecrawl/Apify) | Secret | CAO (trả phí, lạm dụng ⇒ mất tiền) | ENV (Vercel) | Runtime server |
+| API keys (Claude/Firecrawl/Apify) | Secret | CAO (trả phí, lạm dụng ⇒ mất tiền) | ENV (Vercel) | Runtime server (i-20260707223448: Claude thay Perplexity) |
 | Gmail App Password + user | Secret | CAO (chiếm dụng hòm thư gửi) | ENV | Runtime server (MailAdapter) |
 | MongoDB URI | Secret | CAO (toàn bộ DB) | ENV | Runtime server |
 | `CRON_SECRET` / chữ ký QStash | Secret | CAO (kích hoạt job) | ENV | Cron/worker |
@@ -46,7 +46,7 @@ updated: 2026-07-06
 - **Admin API** `/api/admin/*` `[CRITICAL]`: mọi mutation phải sau session.
 - **Cron/Worker API** `/api/cron/*`, `/api/worker/*` `[HIGH]`: máy-máy, bảo vệ bằng secret/chữ ký.
 - **Public API** `/api/public/unsubscribe/:token` `[MEDIUM]`: vô danh, capability-token; giới hạn hành động (chỉ tắt).
-- **Tích hợp bên thứ ba** (Perplexity/Firecrawl/Apify/Gmail) `[HIGH]`: kênh outbound, rủi ro quota/nội dung độc/SSRF.
+- **Tích hợp bên thứ ba** (Claude/Firecrawl/Apify/Gmail) `[HIGH]`: kênh outbound, rủi ro quota/nội dung độc/SSRF. (i-20260707223448: Claude web search do Anthropic thực thi server-side — không tăng SSRF phía ta)
 - **Không có**: mobile, SSO, upload file, import (ghi "Không phát hiện" ở mục tương ứng).
 
 # Authentication Review
@@ -55,6 +55,8 @@ updated: 2026-07-06
 - `[MEDIUM]` **Password policy**: tối thiểu độ dài/độ phức tạp cho admin; App Password Gmail phải là app-password (không dùng mật khẩu chính).
 - `[MEDIUM]` **MFA**: chưa có; với 1 admin, khuyến nghị bật (ít nhất TOTP) vì tài khoản này = toàn quyền — ghi nhận (không chặn GĐ1).
 - `[LOW]` **Reset password**: GĐ1 seed từ env, chưa có luồng reset self-service → đổi qua env + reseed (tài liệu hóa).
+- `[i-20260707223448]` **Claude credential (máy-máy)**: `ANTHROPIC_API_KEY` hoặc `ANTHROPIC_AUTH_TOKEN` (OAuth `sk-ant-oat`) — secret CAO, chỉ ở ENV, không log/không `NEXT_PUBLIC_*`; ngắn hạn → cập nhật/thu hồi thủ công; ưu tiên token nếu có cả hai. **Bơm vào tiến trình con qua ENV** (không qua arg → không lộ `ps`/log).
+- `[i-20260707223448]` **Spawn `claude` CLI** thêm bề mặt exec: chống prompt-injection từ nội dung web bằng `--permission-mode plan` (chỉ-đọc, không ghi/exec); args cố định + prompt qua stdin (chống command injection); `CLAUDE_CONFIG_DIR` tạm + xoá ENV auth kế thừa (không mượn tài khoản host); dọn config dir trong `finally`. Phụ thuộc binary bên thứ ba (`@anthropic-ai/claude-code`) → quản chuỗi cung ứng.
 
 # SSO Review
 
@@ -97,6 +99,7 @@ updated: 2026-07-06
 | API5 BFLA | mọi mutation | Thiếu kiểm vai trò theo function | EoP | `[CRITICAL]` |
 | API8 Misconfig | CORS/headers | CORS mở, thiếu security headers | Nhiều | `[MEDIUM]` |
 | API6 Unrestricted access to sensitive flows | unsubscribe/run-now | Thiếu rate limit | Lạm dụng | `[MEDIUM]` |
+| API6 (i-20260708000200) | run-now nay **gửi email** (side-effect ra ngoài) | Bấm dồn dập → spam subscriber + đốt quota | rate-limit `10/60s` + admin + CSRF `checkOrigin` (đã có) | `[MEDIUM]` |
 
 # Injection Risks
 

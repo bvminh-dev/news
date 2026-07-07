@@ -13,18 +13,19 @@ updated: 2026-07-06
 
 **C4 — Context:**
 - **Actor:** Admin (1 người, giai đoạn 1) — quản lý danh mục & người nhận, xem trước, chạy thủ công.
-- **Hệ ngoài:** Perplexity API, Firecrawl, Apify (thu thập); Gmail SMTP (gửi); (tùy chọn) QStash/Inngest (hàng đợi fan-out); Vercel Cron (bộ lịch).
+- **Hệ ngoài:** Claude API (web search), Firecrawl, Apify (thu thập); Gmail SMTP (gửi); (tùy chọn) QStash/Inngest (hàng đợi fan-out); Vercel Cron (bộ lịch). (i-20260707223448: Claude thay Perplexity)
 
 **C4 — Container:**
 1. **Web/Admin UI** (Next.js RSC + route handlers) — CRUD + preview, sau `Auth`.
 2. **API layer** (route handlers): `admin`, `cron`, `worker`, `public/unsubscribe`.
 3. **Domain core** (thuần, không phụ thuộc framework): `collection`, `ranking`, `dedup`, `digest`.
-4. **Adapters**: `NewsSourceAdapter` (Perplexity/Firecrawl/Apify), `MailAdapter` (SMTP), `QueueAdapter` (QStash/waitUntil), `ConfigProvider` (env), `Repository` (Mongo).
+4. **Adapters**: `NewsSourceAdapter` (Claude/Firecrawl/Apify), `MailAdapter` (SMTP), `QueueAdapter` (QStash/waitUntil), `ConfigProvider` (env), `Repository` (Mongo). (i-20260707223448)
 5. **MongoDB**: `categories`, `subscribers`, `news_items`, `digest_runs`, `delivery_logs`, `admin_users`.
 
 **Luồng vận hành (2 bước tách rời, idempotent):**
 - **06:00 ICT (Cron A → `/api/cron/collect`)**: trả 202 ngay; fan-out mỗi danh mục thành 1 job worker (`/api/worker/collect`) → mỗi worker thu thập trong ngân sách timeout riêng → ghi `news_items` + cập nhật `digest_runs.status`.
 - **06:30 ICT (Cron B → `/api/cron/send`)**: đọc `digest_runs` đã `collected` → fan-out `/api/worker/send` mỗi danh mục → render + gửi tới `subscribers` → ghi `delivery_logs`.
+- **Chạy ngay (admin, đồng bộ) `/api/admin/run-now`** `[i-20260708000200]`: `collectCategory({force:true})` (bỏ qua idempotency; đẩy rank tin cũ +N; upsert tin mới rank 1..N — giữ cả hai) → nếu `collected`/`partial`: `resetDeliveries` + `sendCategory` (email top-N cho subscriber). `sendCategory` giới hạn `.limit(topN)`. Không gửi khi collect `failed`.
 
 **Phát hiện trọng yếu:**
 - `[HIGH]` Ràng buộc **Vercel serverless không chạy nền sau khi HTTP trả về** ⇒ bắt buộc dùng **hàng đợi fan-out** (QStash) hoặc `waitUntil` giới hạn; đã chọn fan-out (ADR-002).
@@ -158,7 +159,7 @@ Sự kiện dùng nội bộ (in-process / qua message hàng đợi), **không**
 
 | Hệ ngoài | Retry | Timeout | Fallback | Circuit Breaker | Rủi ro |
 |----------|-------|---------|----------|-----------------|--------|
-| Perplexity API | 2–3 lần backoff | có (env) | bỏ qua nguồn này, dùng adapter khác | ngưỡng lỗi/ngày → tắt tạm | `[HIGH]` quota/chi phí |
+| Claude API (web search) | SDK retry 2 | SDK mặc định | bỏ qua nguồn này, dùng adapter khác | ngưỡng lỗi/ngày → tắt tạm | `[HIGH]` quota/chi phí web search (i-20260707223448) |
 | Firecrawl | 2–3 backoff | có | bỏ qua | như trên | `[MEDIUM]` SSRF/nội dung độc |
 | Apify (actors) | poll async có giới hạn | có (chạy có thể lâu) | engagement=0, xếp theo relevance | như trên | `[HIGH]` chạy lâu → phải trong worker riêng |
 | Gmail SMTP | 2 lần/người nhận | có | ghi failed, alert | ~500/ngày | `[MEDIUM]` giới hạn gửi |
@@ -170,7 +171,7 @@ Sự kiện dùng nội bộ (in-process / qua message hàng đợi), **không**
 
 | Kịch bản lỗi | Hệ thống còn chạy? | Mất dữ liệu? | Xử lý mong đợi |
 |--------------|--------------------|--------------|----------------|
-| Perplexity timeout/500 | Có | Không | retry→bỏ qua, dùng adapter còn lại; run=partial nếu thiếu | 
+| Claude API refusal/5xx | Có | Không | retry→bỏ qua, dùng adapter còn lại; run=partial nếu thiếu (i-20260707223448) | 
 | Tất cả adapter trống key | Có | Không | không thu thập, `digest_runs=failed`, **alert admin**, 06:30 không gửi rỗng `[HIGH]` |
 | Apify job treo | Có | Không | timeout poll → engagement=0, tiếp tục | 
 | Mongo down | Dừng an toàn | Không (chưa ghi) | log/alert, cron sau chạy lại (idempotent) `[HIGH]` |
@@ -185,6 +186,7 @@ Sự kiện dùng nội bộ (in-process / qua message hàng đợi), **không**
 
 - **NextAuth (Auth.js) Credentials provider** hoặc middleware session; admin seed từ env (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH` bcrypt) → lưu `admin_users`. Session cookie HttpOnly/Secure. `NEXTAUTH_SECRET` từ env.
 - **Cron/worker không dùng session** mà dùng **shared secret**: `CRON_SECRET` (header `Authorization: Bearer` do Vercel Cron gửi) + chữ ký QStash cho worker.
+- `[i-20260707223448]` **Claude (máy-máy) — spawn `claude` CLI headless** (`claude -p`, không dùng SDK Messages API). `ClaudeAdapter` nhận diện credential theo tiền tố rồi bơm qua ENV tiến trình con: `sk-ant-api...` → `ANTHROPIC_API_KEY`+`--bare`; `sk-ant-oat...` → `CLAUDE_CODE_OAUTH_TOKEN`. Xoá ENV auth kế thừa + `CLAUDE_CONFIG_DIR` tạm riêng (cô lập host); prompt qua stdin; `--permission-mode plan` (chỉ-đọc). Registry ưu tiên `anthropicAuthToken`. Lý do dùng CLI: token subscription `sk-ant-oat` chạy được qua CLI (bị `429` nếu gọi thẳng Messages API). `[HIGH]` **Ràng buộc: cần binary `claude` + spawn ⇒ KHÔNG chạy Vercel serverless** — mâu thuẫn ADR-002 (fan-out serverless); deploy tự host/long-running.
 
 **`[HIGH]` Authentication Risks:** phải phân biệt rõ 2 kênh (session người dùng vs secret máy-máy); không để worker/cron mở công khai.
 
@@ -259,6 +261,9 @@ Sự kiện dùng nội bộ (in-process / qua message hàng đợi), **không**
 | ADR-20260706231719-07 | TTL index theo `NEWS_RETENTION_DAYS`, ràng buộc `retention ≥ dedupWindow` | Kiểm soát dung lượng + đảm bảo dedup | Xóa thủ công/cron dọn | Cần cấu hình đúng | Dữ liệu tự dọn, dedup an toàn |
 | ADR-20260706231719-08 | Auth: NextAuth Credentials (admin seed env) + secret cho cron/worker | Tách kênh người-máy | Basic Auth / chỉ token | Cần cấu hình NextAuth | Bảo mật đúng ranh giới |
 | ADR-20260706231719-09 | Nhà cung cấp email qua `MailAdapter` (v1: Gmail SMTP/nodemailer) | GĐ1 gửi cá nhân | Resend/SES ngay | Gmail giới hạn ~500/ngày | Dễ đổi provider khi scale |
+| ADR-20260707223448-01 | Nguồn AI = Claude Messages API + web_search tool (thay Perplexity) | Người dùng đã có Claude key; hợp nhất provider | Giữ Perplexity / cả hai | Web search tính phí riêng | Adapter `claude` trong Registry |
+| ADR-20260707223448-02 | Model qua env `CLAUDE_MODEL` (mặc định claude-opus-4-8) | Không hardcode | Hardcode model | Thêm 1 biến env | Linh hoạt chọn tier |
+| ADR-20260707223448-03 | Dùng `web_search_20250305` (SDK 0.70.1 type sẵn) | SDK chưa type `_20260209` | Nâng SDK ngay | Chưa có dynamic filtering | Type-safe trên opus-4-8 |
 
 # Quality Attribute Assessment
 
@@ -278,7 +283,7 @@ Sự kiện dùng nội bộ (in-process / qua message hàng đợi), **không**
 
 > Không còn Open Question **chặn**. Các mục dưới là quyết định-mặc-định (cấu hình được), không chặn code:
 1. ✅ Hàng đợi: mặc định QStash nếu có `QSTASH_TOKEN`, không thì `waitUntil` tuần tự (ADR-02) — có thể đổi ở bước code nếu người dùng muốn Inngest.
-2. ✅ Provider AI cho relevance: tái dùng **Perplexity** (đã có key); không thêm provider riêng.
+2. ✅ Provider AI cho relevance: **Claude API + web search tool** (i-20260707223448 thay thế: trước là Perplexity); model qua env `CLAUDE_MODEL` (mặc định claude-opus-4-8).
 3. 🟡 Chuẩn hóa engagement cụ thể (min-max vs z-score vs percentile) — chốt phương pháp ở /tn-code, mặc định **min-max theo platform**; không chặn thiết kế.
 4. 🟡 Digest 1 email/category (giả định [A6]) — giữ nguyên trừ khi người dùng đổi ở bước sau.
 

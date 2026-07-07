@@ -4,6 +4,7 @@ import { getConfig } from '@/lib/config';
 import { workerJobSchema } from '@/domain/schemas';
 import { localDateString } from '@/domain/idempotency';
 import { collectCategory } from '@/services/collect';
+import { sendCategory, resetDeliveries } from '@/services/send';
 import { rateLimit, clientKey } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,14 @@ export async function POST(req: NextRequest) {
   const parsed = workerJobSchema.pick({ categoryId: true }).safeParse(body);
   if (!parsed.success) return json(400, { error: 'categoryId không hợp lệ' });
 
-  const result = await collectCategory(parsed.data.categoryId, date, new Date());
-  return json(200, { date, result });
+  // Chạy ngay: FORCE thu thập lại (đẩy tin cũ xuống, re-rank tin mới lên đầu).
+  const result = await collectCategory(parsed.data.categoryId, date, new Date(), { force: true });
+
+  // Gửi email LUÔN cho toàn bộ subscriber (gửi lại data mới) — chỉ khi collect có tin.
+  let send: Awaited<ReturnType<typeof sendCategory>> | undefined;
+  if (result.status === 'collected' || result.status === 'partial') {
+    await resetDeliveries(parsed.data.categoryId, date);
+    send = await sendCategory(parsed.data.categoryId, date);
+  }
+  return json(200, { date, result, send });
 }

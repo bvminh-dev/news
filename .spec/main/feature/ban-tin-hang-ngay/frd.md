@@ -10,7 +10,11 @@ updated: 2026-07-06
 # Tóm Tắt Tính Năng
 
 Xây dựng ứng dụng **Bản tin hàng ngày (Daily News Digest)** trên **Next.js + Vercel**, DB **MongoDB**.
-Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin nổi bật trong 24 giờ trước** cho **từng danh mục** (ví dụ: AI, giá vàng…), tìm kiếm ở cả **Việt Nam và thế giới** thông qua các công cụ **Perplexity API, Apify, Firecrawl**, lưu vào MongoDB (có lịch sử + chống trùng), rồi **gửi email bản tin** tới danh sách người nhận đăng ký theo danh mục.
+Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin nổi bật trong 24 giờ trước** cho **từng danh mục** (ví dụ: AI, giá vàng…), tìm kiếm ở cả **Việt Nam và thế giới** thông qua các công cụ **Claude API (web search), Apify, Firecrawl**, lưu vào MongoDB (có lịch sử + chống trùng), rồi **gửi email bản tin** tới danh sách người nhận đăng ký theo danh mục.
+
+> [i-20260707223448] thay thế: nguồn AI tìm/tóm tắt/relevance từ **Perplexity API → Claude API (web search tool)**; `PERPLEXITY_API_KEY` → `ANTHROPIC_API_KEY` + `CLAUDE_MODEL`. Apify/Firecrawl giữ nguyên.
+> [i-20260707223448] bổ sung: Claude chấp nhận **2 credential** qua ENV — `ANTHROPIC_API_KEY` (`sk-ant-api...`) HOẶC `ANTHROPIC_AUTH_TOKEN` (OAuth Claude Code `sk-ant-oat...`); có cả hai ⇒ ưu tiên token.
+> [i-20260707223448-b] **đổi cơ chế gọi**: adapter **spawn `claude` CLI headless** (thay SDK Messages API) để token subscription `sk-ant-oat` chạy được (gọi thẳng Messages API bị `429`). Verify thật: token oat → 3 tin, ~94s. `[HIGH]` Ràng buộc: cần binary `claude` + spawn subprocess ⇒ **không chạy Vercel serverless** (dùng môi trường tự host/long-running).
 
 **Phạm vi (in-scope):**
 - CRUD **Danh mục** (category) + danh sách **email người nhận** theo từng danh mục, qua **giao diện admin có đăng nhập**.
@@ -47,7 +51,7 @@ Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin 
 
 **B. Thu thập tự động (06:00 giờ cấu hình):**
 1. Cron kích hoạt endpoint thu thập → **trả về ngay** (chấp nhận job chạy nội bộ/nền).
-2. Với mỗi danh mục đang bật: gọi các công cụ **có env key** (Perplexity/Firecrawl để tìm & trích xuất; Apify để lấy tương tác từ Facebook/Reddit/X/TikTok/GitHub…).
+2. Với mỗi danh mục đang bật: gọi các công cụ **có env key** (Claude web search/Firecrawl để tìm & trích xuất; Apify để lấy tương tác từ Facebook/Reddit/X/TikTok/GitHub…). (i-20260707223448)
 3. **Lọc liên quan bằng AI** trong 24h, **xếp hạng kết hợp engagement**, chọn **Top N**, **chống trùng** theo dedup window.
 4. **Lưu kết quả vào MongoDB** (bản tin theo danh mục + ngày, kèm nguồn/điểm/URL) và trạng thái chạy (run log).
 
@@ -62,6 +66,7 @@ Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin 
 - **AT-2:** Chỉ một số env key có mặt → chỉ dùng công cụ tương ứng; ghi rõ công cụ bị bỏ qua.
 - **AT-3:** Top N override theo danh mục → dùng giá trị override thay cho mặc định env.
 - **AT-4:** Chạy thủ công (admin bấm "chạy ngay" cho 1 danh mục) — tùy chọn tiện ích, không thay lịch tự động.
+  - `[i-20260708000200]` "Chạy ngay" = **force re-collect**: thu thập lại (bỏ qua idempotency trong-ngày), tin MỚI re-rank lên đầu (rank 1..N), tin CŨ cùng ngày đẩy xuống (rank +N, **giữ cả hai**); sau đó **gửi email luôn** cho toàn bộ subscriber active (reset trạng thái đã-gửi hôm nay). Email chỉ lấy top-N. KHÔNG gửi nếu collect `failed`. Cron 06:00/06:30 KHÔNG đổi (vẫn idempotent).
 
 # Luồng Ngoại Lệ
 
@@ -145,7 +150,7 @@ Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin 
 | -------------------- | ---------------------- | --------------- |
 | Config/env loader (không hardcode) | Toàn hệ thống | `[MEDIUM]` |
 | MongoDB connection + models | Thu thập, gửi, CRUD | `[MEDIUM]` |
-| Tool adapters (Perplexity/Apify/Firecrawl) | Bước thu thập | `[HIGH]` |
+| Tool adapters (Claude/Apify/Firecrawl) | Bước thu thập | `[HIGH]` (i-20260707223448) |
 | Auth admin | Toàn bộ trang quản trị + API | `[HIGH]` |
 
 # Rủi Ro Dữ Liệu
@@ -180,7 +185,7 @@ Mỗi ngày hệ thống tự động thu thập **Top N (mặc định 10) tin 
 
 > Tất cả câu hỏi **chặn** đã được giải quyết trong 2 vòng hỏi (không còn open question chặn). Các mục dưới là **đã chốt** hoặc **giả định tường minh** để bước sau tinh chỉnh:
 
-1. ✅ **Công cụ bắt buộc:** Perplexity API, Apify, Firecrawl (thiếu env key ⇒ không dùng công cụ đó). **NotebookLM ngoài phạm vi** (không API).
+1. ✅ **Công cụ bắt buộc:** Claude API (web search) [i-20260707223448, trước là Perplexity], Apify, Firecrawl (thiếu env key ⇒ không dùng công cụ đó). **NotebookLM ngoài phạm vi** (không API).
 2. ✅ **Lịch chạy:** 6:00 thu thập (trả về ngay, chạy nội bộ, lưu DB) → 6:30 gửi email. Múi giờ **cấu hình qua env** (mặc định ICT).
 3. ✅ **Xác thực admin:** bắt buộc đăng nhập cho CRUD danh mục & email.
 4. ✅ **Email:** giai đoạn 1 dùng **Gmail cá nhân (SMTP)** gửi tới email cá nhân khác (cấu hình env). Nhà cung cấp chuyên dụng + unsubscribe để dành mở rộng.

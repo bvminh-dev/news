@@ -20,6 +20,7 @@
 - **06:00 ICT** `/api/cron/collect` → 202 → fan-out `/api/worker/collect` (1/category) → ghi `news_items` + `digest_runs`.
 - **06:30 ICT** `/api/cron/send` → fan-out `/api/worker/send` (category `collected`) → gửi → `delivery_logs`.
 - Lịch cron trong `vercel.json` theo **UTC** (23:00/23:30 = 06:00/06:30 ICT).
+- **Chạy ngay (admin)** `/api/admin/run-now`: force re-collect (đẩy tin cũ +N rank, tin mới rank 1..N, giữ cả hai) → reset delivery_logs hôm nay → gửi email top-N cho subscriber active (đồng bộ). Cron giữ idempotent. (i-20260708000200)
 
 ## 4. Mô hình dữ liệu (collections)
 `categories`, `subscribers`, `news_items`, `digest_runs`, `delivery_logs`, `admin_users`.
@@ -28,11 +29,12 @@
 - TTL theo `NEWS_RETENTION_DAYS`, ràng buộc `retention ≥ dedupWindow`.
 
 ## 5. Tích hợp ngoài
-Perplexity API · Firecrawl · Apify (thu thập) · Gmail SMTP (gửi) · QStash/waitUntil (fan-out) · Vercel Cron.
+Claude API (web search) · Firecrawl · Apify (thu thập) · Gmail SMTP (gửi) · QStash/waitUntil (fan-out) · Vercel Cron. (i-20260707223448: Claude thay Perplexity)
 Mọi adapter: retry + timeout + fallback + circuit-breaker mềm; thiếu env key ⇒ không dùng.
 
 ## 6. Bảo mật (tóm tắt)
 - Admin: session (NextAuth Credentials, seed env). Cron/worker: `CRON_SECRET` + chữ ký QStash.
+- Claude (máy-máy): adapter **spawn `claude` CLI headless** (không SDK); credential qua ENV (`ANTHROPIC_API_KEY`+`--bare` hoặc `CLAUDE_CODE_OAUTH_TOKEN`, ưu tiên token); config dir cô lập + `--permission-mode plan`. `[HIGH]` cần binary + spawn ⇒ **không chạy Vercel serverless** (mâu thuẫn ADR fan-out serverless) → deploy tự host. (i-20260707223448)
 - Secrets chỉ ở ENV, không log/không trả API. Sanitize HTML email. Firecrawl chỉ URL công khai.
 
 ## 7. ADR chỉ mục

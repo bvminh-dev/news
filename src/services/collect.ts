@@ -27,6 +27,7 @@ export async function collectCategory(
   categoryId: string,
   date: string,
   runTime: Date,
+  opts: { force?: boolean } = {},
 ): Promise<CollectResult> {
   const cfg = getConfig();
   await ensureIndexes();
@@ -37,9 +38,10 @@ export async function collectCategory(
     return { status: 'failed', found: 0, selected: 0, toolsUsed: [], errors: ['category-missing-or-disabled'] };
   }
 
-  // Idempotency: nếu đã collected hôm nay → no-op.
+  // Idempotency: nếu đã collected hôm nay → no-op. Trừ khi force (chạy ngay):
+  // luôn thu thập lại, đẩy tin cũ xuống, re-rank bộ tin mới lên đầu.
   const existing = await c.runs.findOne({ date, categoryId: category._id, step: 'collect' });
-  if (existing && existing.status === 'collected') {
+  if (!opts.force && existing && existing.status === 'collected') {
     return {
       status: 'collected',
       found: existing.counts.found,
@@ -114,7 +116,17 @@ export async function collectCategory(
   // rank + chọn Top N
   const ranked = selectTopN(fresh, topN, { relevance: cfg.weightRelevance, engagement: cfg.weightEngagement });
 
-  // upsert news_items (idempotent theo (categoryId, normalizedUrl))
+  // Force (chạy ngay): đẩy tin CŨ của hôm nay xuống dưới (rank += số tin mới),
+  // để bộ tin MỚI (đã re-rank 1..N) nằm trên đầu. Giữ cả hai (lịch sử trong ngày).
+  // Tin mới là URL chưa có trong DB (đã lọc dedup-window) nên không đè tin cũ.
+  if (opts.force && ranked.length > 0) {
+    await c.news.updateMany(
+      { categoryId: category._id, date },
+      { $inc: { rank: ranked.length } },
+    );
+  }
+
+  // upsert news_items (idempotent theo (categoryId, date, normalizedUrl))
   const now = new Date();
   for (const item of ranked) {
     // BUG-1: KHÔNG đặt createdAt trong $set (tránh xung đột với $setOnInsert).

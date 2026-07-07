@@ -113,3 +113,11 @@ Toàn bộ `data-testid` trong bảng E2E Locators đã hiện diện trong mã 
   2. Chạy **E2E-02** (chặn truy cập) và **E2E-01** (happy path) trên app thật.
   3. Bật coverage report để đo độ phủ số liệu.
 - Liên kết ngược: `test.md` (thiết kế + E2E Locators), `plan.md` (T21 & tiêu chí Done — phần Functional/E2E còn nợ do môi trường).
+
+---
+
+# [i-20260707223448] Delta report — Perplexity → Claude (2026-07-07)
+- Runner: vitest 46/46 PASS · tsc sạch · next build OK.
+- Unit UT-16a/b/c (registry theo env, adapter `claude`): PASS. 0 defect.
+- FT-08' (collect Claude live): BLOCKED — cần ANTHROPIC_API_KEY + mạng.
+- Kết luận: GO mức dev; chạy FT-08' với key thật trước production.

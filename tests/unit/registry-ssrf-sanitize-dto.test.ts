@@ -8,16 +8,27 @@ import { idempotencyKey, localDateString } from '@/domain/idempotency';
 import { CategoryDoc, SubscriberDoc } from '@/models';
 
 describe('UT-16 buildActiveAdapters theo env', () => {
+  const model = 'claude-opus-4-8';
   it('đủ key → 3 adapter', () => {
-    expect(buildActiveAdapters({ perplexityKey: 'a', firecrawlKey: 'b', apifyToken: 'c' })).toHaveLength(3);
+    expect(buildActiveAdapters({ anthropicKey: 'a', claudeModel: model, firecrawlKey: 'b', apifyToken: 'c' })).toHaveLength(3);
   });
-  it('chỉ perplexity → 1 adapter', () => {
-    const a = buildActiveAdapters({ perplexityKey: 'a', firecrawlKey: '', apifyToken: '' });
+  it('chỉ claude → 1 adapter', () => {
+    const a = buildActiveAdapters({ anthropicKey: 'a', claudeModel: model, firecrawlKey: '', apifyToken: '' });
     expect(a).toHaveLength(1);
-    expect(a[0].name).toBe('perplexity');
+    expect(a[0].name).toBe('claude');
   });
   it('không key → 0 adapter', () => {
-    expect(buildActiveAdapters({ perplexityKey: '', firecrawlKey: '', apifyToken: '' })).toHaveLength(0);
+    expect(buildActiveAdapters({ anthropicKey: '', claudeModel: model, firecrawlKey: '', apifyToken: '' })).toHaveLength(0);
+  });
+  it('UT-16d chỉ anthropicAuthToken → 1 adapter claude', () => {
+    const a = buildActiveAdapters({ anthropicKey: '', anthropicAuthToken: 'sk-ant-oat-x', claudeModel: model, firecrawlKey: '', apifyToken: '' });
+    expect(a).toHaveLength(1);
+    expect(a[0].name).toBe('claude');
+  });
+  it('UT-16e có cả key lẫn token → vẫn 1 adapter claude (ưu tiên token)', () => {
+    const a = buildActiveAdapters({ anthropicKey: 'sk-ant-api-x', anthropicAuthToken: 'sk-ant-oat-x', claudeModel: model, firecrawlKey: '', apifyToken: '' });
+    expect(a).toHaveLength(1);
+    expect(a[0].name).toBe('claude');
   });
 });
 

@@ -88,3 +88,50 @@ describe('FT-DB collect upsert (fix BUG-1 & BUG-2)', () => {
     expect(docs.map((d) => d.date).sort()).toEqual(['2026-07-01', '2026-07-16']);
   });
 });
+
+describe('FT-DB run-now force: đẩy tin cũ xuống, tin mới lên đầu', () => {
+  it('shift rank += số tin mới, rồi tin mới chiếm rank 1..N', async () => {
+    const { collections } = await import('@/models');
+    const c = await collections();
+    const catId = new ObjectId();
+    const date = '2026-07-20';
+    // Seed 3 tin cũ rank 1..3.
+    for (let i = 1; i <= 3; i++) {
+      const u = newsUpsert(catId, date, `https://old.com/${i}`, i);
+      await c.news.updateOne(u.filter, u.update, u.opts);
+    }
+    // Force run: đẩy tin cũ xuống +2 (số tin mới), rồi chèn 2 tin mới rank 1..2.
+    const NEW = 2;
+    await c.news.updateMany({ categoryId: catId, date }, { $inc: { rank: NEW } });
+    for (let i = 1; i <= NEW; i++) {
+      const u = newsUpsert(catId, date, `https://new.com/${i}`, i);
+      await c.news.updateOne(u.filter, u.update, u.opts);
+    }
+    const docs = await c.news.find({ categoryId: catId, date }).sort({ rank: 1 }).toArray();
+    expect(docs).toHaveLength(5); // 3 cũ + 2 mới (giữ cả hai)
+    // 2 tin đầu (rank 1,2) là tin MỚI; phần còn lại (rank 3..5) là tin cũ đã đẩy xuống.
+    expect(docs.slice(0, 2).map((d) => d.url)).toEqual(['https://new.com/1', 'https://new.com/2']);
+    expect(docs.map((d) => d.rank)).toEqual([1, 2, 3, 4, 5]);
+    expect(docs.slice(2).every((d) => d.url.startsWith('https://old.com/'))).toBe(true);
+  });
+
+  it('send giới hạn top-N → chỉ lấy bộ tin mới trên đầu', async () => {
+    const { collections } = await import('@/models');
+    const c = await collections();
+    const catId = new ObjectId();
+    const date = '2026-07-21';
+    // 5 tin: rank 1..2 mới, 3..5 cũ.
+    const seed = [
+      newsUpsert(catId, date, 'https://n.com/1', 1),
+      newsUpsert(catId, date, 'https://n.com/2', 2),
+      newsUpsert(catId, date, 'https://o.com/3', 3),
+      newsUpsert(catId, date, 'https://o.com/4', 4),
+      newsUpsert(catId, date, 'https://o.com/5', 5),
+    ];
+    for (const u of seed) await c.news.updateOne(u.filter, u.update, u.opts);
+    const topN = 2;
+    const sent = await c.news.find({ categoryId: catId, date }).sort({ rank: 1 }).limit(topN).toArray();
+    expect(sent).toHaveLength(2);
+    expect(sent.map((d) => d.url)).toEqual(['https://n.com/1', 'https://n.com/2']);
+  });
+});

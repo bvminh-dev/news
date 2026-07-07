@@ -9,6 +9,10 @@ updated: 2026-07-06
 
 # Phân Tích Requirement
 
+> [i-20260707223448] thay thế: nguồn AI "Perplexity" → "Claude" trong mọi test case (tên `tools=[perplexity]` → `[claude]`, `PERPLEXITY_API_KEY` → `ANTHROPIC_API_KEY`); logic test không đổi. UT-16 đã cập nhật khóa env `anthropicKey` và PASS.
+> [i-20260707223448] bổ sung: xác thực Claude bằng `ANTHROPIC_AUTH_TOKEN` (OAuth) — thêm UT-16d (chỉ token → 1 adapter claude) + UT-16e (key+token → ưu tiên token). Toàn bộ suite **48/48 PASS**.
+> [i-20260708000200] bổ sung run-now (force + email): thêm FT-RN-1 (đẩy rank tin cũ +N, tin mới rank 1..N, giữ cả hai) + FT-RN-2 (send `.limit(topN)` → bộ tin mới). Suite **50/50 PASS**.
+
 **Phạm vi kiểm thử:** ứng dụng Bản tin hàng ngày (Next.js/Vercel + MongoDB).
 - **Admin UI/API:** đăng nhập; CRUD **danh mục** (name/keywords/scope/topN/enabled/lang); CRUD **email người nhận** theo danh mục; preview; run-now.
 - **Thu thập (06:00):** fan-out per-category; adapter registry theo env; chuẩn hóa + dedup + ranking (AI relevance + engagement) → Top N; ghi `news_items` + `digest_runs`.
@@ -42,7 +46,7 @@ updated: 2026-07-06
 - TS-01 Admin đăng nhập → tạo danh mục "AI" (keywords, scope=VN+WORLD) → thêm 2 email → lưu.
 - TS-02 Cron 06:00 chạy đủ adapter → mỗi danh mục có Top N tin không trùng → `digest_runs=collected`.
 - TS-03 Cron 06:30 → gửi digest tới người nhận → `delivery_logs=sent`; chạy lại 06:30 → không gửi trùng.
-- TS-04 Chỉ có `PERPLEXITY_API_KEY` (thiếu Firecrawl/Apify) → vẫn thu thập bằng Perplexity, engagement=0, xếp theo relevance.
+- TS-04 Chỉ có `ANTHROPIC_API_KEY` (thiếu Firecrawl/Apify) → vẫn thu thập bằng Claude, engagement=0, xếp theo relevance. (i-20260707223448)
 - TS-05 Không có env key nào → không thu thập → `digest_runs=failed` → 06:30 không gửi rỗng → alert admin.
 - TS-06 Tin trùng giữa hôm nay và trong dedup window → bị loại, không gửi lại.
 - TS-07 Người nhận bấm unsubscribe → active=false → lần gửi sau không nhận.
@@ -62,7 +66,7 @@ updated: 2026-07-06
 | TC-08 | Có danh mục | Thêm email sai định dạng | "abc@", "a b@x.com" | Báo lỗi định dạng | *EP* |
 | TC-09 | Danh mục có email X | Thêm lại email X | trùng | Báo trùng; không tạo bản ghi 2 | *EP* |
 | TC-10 | Có danh mục enabled + đủ env | Chạy collect | — | Mỗi danh mục ≤ topN tin, không trùng, `collected` | *Decision Table* |
-| TC-11 | Chỉ có Perplexity key | Chạy collect | thiếu Firecrawl/Apify | Thu thập được, engagement=0, tools=[perplexity] | *Decision Table* |
+| TC-11 | Chỉ có Claude key | Chạy collect | thiếu Firecrawl/Apify | Thu thập được, engagement=0, tools=[claude] | *Decision Table* |
 | TC-12 | Không env key nào | Chạy collect | — | `failed`, alert admin, không tạo tin | *Decision Table* |
 | TC-13 | Đã collect hôm nay | Chạy collect lần 2 cùng ngày | same date | Idempotent: không tạo tin trùng/không ghi đè sai | *State Transition* |
 | TC-14 | Có tin URL `x?utm=1` hôm qua (trong window) | Collect thấy `x?utm=2` | cùng URL chuẩn hóa | Bị dedup, không thêm | *Error Guessing* |
@@ -299,7 +303,7 @@ updated: 2026-07-06
 | UT-13 | `keywordsSchema` | [] / 1 / 20 / 21; len 101 | fail/pass/pass/fail; fail | BVA | TC-06 |
 | UT-14 | `scopeSchema` | VN / WORLD / [VN,WORLD] / "XX" | pass×3 / fail | EP | TCD-02 |
 | UT-15 | `validateConfig()` | retention=7,dedup=14 / retention=30,dedup=14 | throw / ok | Decision Table | TC-... (retention≥dedup) |
-| UT-16 | `buildActiveAdapters(env)` | đủ key / chỉ perplexity / không key | [3]/[perplexity]/[] | Decision Table | TC-11,TC-12 |
+| UT-16 | `buildActiveAdapters(env)` | đủ key / chỉ claude / không key / chỉ token / key+token | [3]/[claude]/[]/[claude]/[claude ưu tiên token] | Decision Table | TC-11,TC-12,TC-D7,TC-D8 |
 | UT-17 | `sanitizeContent()` | `<script>`,`<img onerror>` trong title | Bị loại/escape, text an toàn | Error Guessing | XSS |
 | UT-18 | `isPublicUrl()` (SSRF guard) | `http://169.254.169.254`, `http://localhost`, `https://x.com` | false/false/true | Error Guessing | SSRF |
 | UT-19 | `toCategoryDTO()`/`toSubscriberDTO()` | doc có passwordHash/unsubscribeToken | DTO không chứa field nhạy cảm | Risk-Based | API3/Data Leakage |
@@ -318,7 +322,7 @@ updated: 2026-07-06
 | FT-05 | NoSQLi guard | đã đăng nhập | POST email=`{"$ne":null}` | payload object | 400 (zod chặn), không query | — | Negative | NoSQLi |
 | FT-06 | Response projection | có dữ liệu | GET danh mục/subscriber | — | Không chứa passwordHash/token/secret | — | Risk-Based | API3 |
 | FT-07 | Collect đủ adapter | danh mục enabled | Chạy worker collect | 3 adapter trả tin | ≤topN tin/danh mục, không trùng, run=collected | Perplexity/Firecrawl/Apify stub | Decision Table | TC-10 |
-| FT-08 | Collect thiếu key | chỉ PERPLEXITY_API_KEY | Chạy collect | env thiếu 2 key | Thu thập được, engagement=0, tools=[perplexity] | stub Perplexity | Decision Table | TC-11,TS-04 |
+| FT-08 | Collect thiếu key | chỉ ANTHROPIC_API_KEY | Chạy collect | env thiếu 2 key | Thu thập được, engagement=0, tools=[claude] | stub Claude | Decision Table | TC-11,TS-04 |
 | FT-09 | Collect no-adapter | không env key | Chạy collect | env trống | run=failed, alert gửi, 0 tin | stub mail alert | Decision Table | TC-12,TS-05 |
 | FT-10 | Collect idempotent | đã collected hôm nay | Chạy collect lần 2 | same date | No-op, không tạo tin trùng | stub adapters | State Transition | TC-13, Concurrency |
 | FT-11 | Dedup xuyên ngày | DB có tin (window) URL x | Collect thấy x?utm=2 | trong dedup window | Bị loại, không thêm | stub adapters | Error Guessing | TC-14,TS-06 |

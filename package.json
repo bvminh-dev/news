@@ -11,9 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:admin": "tsx scripts/seed-admin.ts"
+    "seed:admin": "tsx --env-file=.env scripts/seed-admin.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.1",
     "bcryptjs": "^2.4.3",
     "mongodb": "^6.8.0",
     "next": "^15.0.0",

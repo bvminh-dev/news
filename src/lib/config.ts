@@ -41,7 +41,9 @@ export interface AppConfig {
     alertTo: string;
   };
   tools: {
-    perplexityKey: string;
+    anthropicKey: string;
+    anthropicAuthToken: string;
+    claudeModel: string;
     firecrawlKey: string;
     apifyToken: string;
   };
@@ -81,7 +83,9 @@ export function getConfig(): AppConfig {
       alertTo: str('ADMIN_ALERT_EMAIL'),
     },
     tools: {
-      perplexityKey: str('PERPLEXITY_API_KEY'),
+      anthropicKey: str('ANTHROPIC_API_KEY'),
+      anthropicAuthToken: str('ANTHROPIC_AUTH_TOKEN'),
+      claudeModel: str('CLAUDE_MODEL', 'claude-opus-4-8'),
       firecrawlKey: str('FIRECRAWL_API_KEY'),
       apifyToken: str('APIFY_TOKEN'),
     },
